@@ -4,20 +4,45 @@ throw new Error 'Neural Network config missing' unless neuralNetworkConfig
 
 # Import packages
 brain = require 'brain'
+lodash = require 'lodash'
+microbrewit = require './microbrewit'
+normalize = require './normalize'
 
-# Create brain
-beerBrain = new brain.NeuralNetwork()
+microbrewit.fetchMicrobrewitBeers (error, beers) ->
+  if error then throw new Error 'Could not load beer recipes for training'
 
-# Train the brain
-beerBrain.train [ {input: { r: 0.03, g: 0.7, b: 0.5 }, output: { black: 1 }},
-                  {input: { r: 0.16, g: 0.09, b: 0.2 }, output: { white: 1 }},
-                  {input: { r: 0.5, g: 0.5, b: 1.0 }, output: { white: 1 }}],
-                  neuralNetworkConfig
+  trainingCases = []
+  # Prep beer recipes
+  for beer in beers
+    trainingCase = {
+      input:
+        abv: normalize.normalizeABV beer.abv.standard
+        ibu: normalize.normalizeIBU beer.ibu.standard
+        srm: normalize.normalizeSRM beer.srm.standard
+      output: {}}
+    trainingCase.output[beer.beerStyle.name] = 1
+    trainingCases.push trainingCase
 
-# Classify some stuff
-output = beerBrain.run { r: 1, g: 0.4, b: 0 }
-output2 = beerBrain.run { r: 0.4, g: 1, b: 0.3 }
+    lodash.sample trainingCases
 
-# Output results
-console.log output
-console.log output2
+
+  # Create brain
+  beerBrain = new brain.NeuralNetwork()
+
+  #Train the brain
+  beerBrain.train trainingCases, neuralNetworkConfig
+
+  # Classify some random values
+  # ABV = 3% normalized: 0.03
+  # IBU = 11 normalized: 0.1
+  # SRM = 12 normalized: 0.3
+  output = beerBrain.run { abv: 0.03,  ibu: 0.1, srm: 0.3 }
+
+  # Make output into sortable array of objects with
+  # beerStyle and probability properties.
+  classes = []
+  for beerStyle, probability of output
+    classes.push {beerStyle: beerStyle, probability: probability}
+  sorted = (lodash.sortBy classes, 'probability').reverse()
+
+  console.log sorted

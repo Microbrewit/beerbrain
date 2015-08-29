@@ -17,6 +17,8 @@
   },
   "homepage": "https://github.com/Microbrewit/beerbrain#readme",
   "dependencies": {
-    "brain": "^0.7.0"
+    "brain": "^0.7.0",
+    "http": "0.0.0",
+    "lodash": "^3.10.1"
   }
 }
