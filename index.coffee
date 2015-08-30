@@ -8,41 +8,54 @@ lodash = require 'lodash'
 microbrewit = require './microbrewit'
 normalize = require './normalize'
 
-microbrewit.fetchMicrobrewitBeers (error, beers) ->
-  if error then throw new Error 'Could not load beer recipes for training'
-
-  trainingCases = []
-  # Prep beer recipes
-  for beer in beers
-    trainingCase = {
-      input:
-        abv: normalize.normalizeABV beer.abv.standard
-        ibu: normalize.normalizeIBU beer.ibu.standard
-        srm: normalize.normalizeSRM beer.srm.standard
-      output: {}}
-    trainingCase.output[beer.beerStyle.name] = 1
-    trainingCases.push trainingCase
-
-    lodash.sample trainingCases
+microbrewit.fetchMicrobrewitBeers()
+  .then((beers) ->
+    trainingCases = []
+    # Prep beer recipes
+    for beer in beers
+      trainingCase = {
+        input:
+          abv: normalize.normalizeABV beer.abv.standard
+          ibu: normalize.normalizeIBU beer.ibu.standard
+          srm: normalize.normalizeSRM beer.srm.standard
+          og: normalize.normalizeGravity beer.recipe.og
+          fg: normalize.normalizeGravity beer.recipe.fg
 
 
-  # Create brain
-  beerBrain = new brain.NeuralNetwork()
+        output: {}}
+      trainingCase.output[beer.beerStyle.name] = 1
+      trainingCases.push trainingCase
 
-  #Train the brain
-  beerBrain.train trainingCases, neuralNetworkConfig
+      lodash.sample trainingCases
 
-  # Classify some random values
-  # ABV = 3% normalized: 0.03
-  # IBU = 11 normalized: 0.1
-  # SRM = 12 normalized: 0.3
-  output = beerBrain.run { abv: 0.03,  ibu: 0.1, srm: 0.3 }
 
-  # Make output into sortable array of objects with
-  # beerStyle and probability properties.
-  classes = []
-  for beerStyle, probability of output
-    classes.push {beerStyle: beerStyle, probability: probability}
-  sorted = (lodash.sortBy classes, 'probability').reverse()
+    # Create brain
+    beerBrain = new brain.NeuralNetwork()
 
-  console.log sorted
+    #Train the brain
+    beerBrain.train trainingCases, neuralNetworkConfig
+
+    # Classify some random values
+    # ABV = 10%
+    # IBU = 40
+    # SRM = 15
+    output = beerBrain.run
+      abv: normalize.normalizeABV 10
+      ibu: normalize.normalizeIBU 24
+      srm: normalize.normalizeSRM 6
+      og: normalize.normalizeGravity 1.094
+      fg: normalize.normalizeGravity 1.015
+
+
+    # Make output into sortable array of objects with
+    # beerStyle and probability properties.
+    classes = []
+    for beerStyle, probability of output
+      classes.push {beerStyle: beerStyle, probability: probability}
+    sorted = (lodash.sortBy classes, 'probability').reverse()
+    console.log sorted
+    process.exit(0))
+  .catch((error) ->
+    console.log 'Could not perform beer recipe classification training because:'
+    console.log error
+    process.exit(1))
