@@ -6,6 +6,8 @@ bluebird = require 'bluebird'
 fs = bluebird.promisifyAll require 'fs'
 http = bluebird.promisifyAll require 'http'
 
+bluebird.longStackTraces();
+
 fetchMicrobrewitBeersFromFile = () ->
   fs.readFileAsync('./beers.json')
     .then((data) ->
