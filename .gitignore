@@ -27,6 +27,6 @@ build/Release
 node_modules
 
 # Configs
-config.coffee
+config/config.coffee
 beers.json
 brain.json
