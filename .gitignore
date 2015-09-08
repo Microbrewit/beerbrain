@@ -30,3 +30,4 @@ node_modules
 config/config.coffee
 beers.json
 brain.json
+cases.json
