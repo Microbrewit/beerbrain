@@ -9,21 +9,30 @@ http = bluebird.promisifyAll require 'http'
 normalize = require './normalize'
 hopsFormulas = require './hopsformulas'
 io = require './io'
+lodash = require 'lodash'
+
+fetchMicrobrewitBeersBatch = bluebird.coroutine (beers, limit) ->
+  url =  microbrewitConfig.apiUrl + "/beers?size=#{limit}&from=#{beers.length}"
+  data = yield io.fetchDataFromUrl url
+  newBeers = (JSON.parse data).beers
+  beers = beers.concat newBeers
+  if newBeers.length < limit
+    return beers
+  else
+    fetchMicrobrewitBeersBatch beers, limit
 
 fetchMicrobrewitBeers = () ->
   io.readFile('./beers.json')
     .catch((error) ->
       console.log 'Fetch from api instead'
-      io.fetchDataFromUrl(microbrewitConfig.apiUrl + '/beers?size=4000')
-        .then((data) ->
-          io.writeFile './beers.json', data))
+      #io.fetchDataFromUrl(microbrewitConfig.apiUrl + '/beers?size=4000')
+      fetchMicrobrewitBeersBatch([], 500)
+        .then((beers) ->
+          return io.writeFile './beers.json', JSON.stringify beers))
     .then((data) ->
       console.log 'We got data after readFile'
       return data)
     .then(JSON.parse)
-    .then((json) ->
-      console.log 'return da beers'
-      return json.beers)
     .catch(SyntaxError, (error) ->
       console.err "File contains invalid json: " + error
       throw new Error 'Could not read ./beers.json')
@@ -69,35 +78,45 @@ getFermentables = (recipe) ->
   return normalized
 
 transformBeersToNeuralNetworkInput = (beers) ->
+  start = new Date().getTime()
   trainingCases = []
+  fails = 0
   # Prep beer recipes
   for beer in beers
-    trainingCase = {
-      input:
-        abv: normalize.normalizeABV beer.abv.standard
-        ibu: normalize.normalizeIBU beer.ibu.standard
-        srm: normalize.normalizeSRM beer.srm.standard
-        og: normalize.normalizeGravity beer.recipe.og
-        fg: normalize.normalizeGravity beer.recipe.fg
-      output: {}}
-    trainingCase.output[beer.beerStyle.name] = 1
+    try
+      trainingCase = {
+        input:
+          abv: normalize.normalizeABV beer.abv.standard
+          ibu: normalize.normalizeIBU beer.ibu.standard
+          srm: normalize.normalizeSRM beer.srm.standard
+          og: normalize.normalizeGravity beer.recipe.og
+          fg: normalize.normalizeGravity beer.recipe.fg
+        output: {}}
+      trainingCase.output[beer.beerStyle.name] = 1
 
-    hops = getHops beer
-    fermentables = getFermentables beer
-    for hop in hops
-      if not trainingCase.input[hop.name]?
-        trainingCase.input[hop.name] = hop.value
-      else
-        trainingCase.input[hop.name] += hop.value
+      hops = getHops beer
+      fermentables = getFermentables beer
+      for hop in hops
+        if not trainingCase.input[hop.name]?
+          trainingCase.input[hop.name] = hop.value
+        else
+          trainingCase.input[hop.name] += hop.value
 
-    for fermentable in fermentables
-      if not trainingCase.input[fermentable.name]?
-        trainingCase.input[fermentable.name] = fermentable.value
-      else
-        trainingCase.input[fermentable.name] += fermentable.value
+      for fermentable in fermentables
+        if not trainingCase.input[fermentable.name]?
+          trainingCase.input[fermentable.name] = fermentable.value
+        else
+          trainingCase.input[fermentable.name] += fermentable.value
 
-    trainingCases.push trainingCase
+      trainingCases.push trainingCase
+    catch error
+      console.error "Could not classify recipe #{beer.name}"
+      fails += 1
 
+  end = new Date().getTime()
+  time = (end - start)/1000
+  console.log "It took #{time} seconds to transform recipes to training cases"
+  console.log "#{fails} out of #{beers.length} failed"
   return trainingCases
 
 exports.fetchMicrobrewitBeers = fetchMicrobrewitBeers
